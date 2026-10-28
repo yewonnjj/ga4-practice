@@ -41,13 +41,13 @@
     var n = getCart().reduce(function (s, l) { return s + l.qty; }, 0);
     document.querySelectorAll('#cart-count').forEach(function (el) { el.textContent = n; });
   }
-  function addToCart(id, qty, listName) {
+  function addToCart(id, qty, listName, addLocation) {
     var c = getCart(), line = c.filter(function (l) { return l.id === id; })[0];
     if (line) line.qty += qty; else c.push({ id: id, qty: qty });
     setCart(c);
     var p = find(id);
     // [GA4] 미션 7: 장바구니 담기
-    track('add_to_cart', { currency: CURRENCY, value: p.price * qty, items: [gaItem(p, qty, listName ? { item_list_name: listName } : {})] });
+    track('add_to_cart', { currency: CURRENCY, value: p.price * qty, add_location: addLocation || page, items: [gaItem(p, qty, listName ? { item_list_name: listName } : {})] });
     toast(p.name + ' ' + qty + '개를 담았습니다');
   }
 
@@ -84,11 +84,11 @@
     if (sel) {
       var p = find(sel.getAttribute('data-select-item'));
       // [GA4] 미션 5: 목록에서 상품 선택
-      track('select_item', { item_list_id: sel.getAttribute('data-list-id'), item_list_name: sel.getAttribute('data-list-name'),
+      track('select_item', { click_target: sel.classList.contains('thumb') ? 'image' : sel.classList.contains('name') ? 'name' : 'detail', item_list_id: sel.getAttribute('data-list-id'), item_list_name: sel.getAttribute('data-list-name'),
         items: [gaItem(p, 1, { index: Number(sel.getAttribute('data-index')) })] });
     }
     var quick = e.target.closest('[data-quick-add]');
-    if (quick) addToCart(quick.getAttribute('data-quick-add'), 1, quick.getAttribute('data-list-name'));
+    if (quick) addToCart(quick.getAttribute('data-quick-add'), 1, quick.getAttribute('data-list-name'), quick.closest('#product-grid') ? 'home_best' : quick.closest('#search-results') ? 'search_results' : 'related');
   });
 
   /* ---------- 페이지별 동작 ---------- */
@@ -122,8 +122,8 @@
     var qty = 1, qEl = document.getElementById('p-qty');
     document.getElementById('qty-minus').onclick = function () { qty = Math.max(1, qty - 1); qEl.textContent = qty; };
     document.getElementById('qty-plus').onclick = function () { qty = Math.min(9, qty + 1); qEl.textContent = qty; };
-    document.getElementById('add-to-cart').onclick = function () { addToCart(p.id, qty); };
-    document.getElementById('buy-now').onclick = function () { addToCart(p.id, qty); location.href = 'checkout.html'; };
+    document.getElementById('add-to-cart').onclick = function () { addToCart(p.id, qty, null, 'product_detail'); };
+    document.getElementById('buy-now').onclick = function () { addToCart(p.id, qty, null, 'buy_now'); location.href = 'checkout.html'; };
     document.getElementById('add-to-wishlist').onclick = function () {
       // [GA4] 미션 8: 찜하기
       track('add_to_wishlist', { currency: CURRENCY, value: p.price, items: [gaItem(p, 1)] });
@@ -172,7 +172,7 @@
       } else if ((id = e.target.getAttribute('data-cart-plus'))) {
         line = c.filter(function (l) { return l.id === id; })[0]; line.qty += 1; setCart(c); p = find(id);
         // [GA4] 미션 7: 수량 1개 늘리기 = 1개 담기
-        track('add_to_cart', { currency: CURRENCY, value: p.price, items: [gaItem(p, 1)] });
+        track('add_to_cart', { currency: CURRENCY, value: p.price, add_location: 'cart', items: [gaItem(p, 1)] });
         drawCart();
       }
     });
@@ -214,12 +214,15 @@
         go(1);
       };
       document.getElementById('back-shipping').onclick = function () { go(0); };
+      var orderSubmitted = false;
       document.getElementById('place-order').onclick = function () {
+        if (orderSubmitted) return;
         var pay = (document.querySelector('input[name="pay"]:checked') || {}).value;
         if (!pay) { toast('결제 수단을 골라 주세요 (실제 결제는 되지 않습니다)'); return; }
+        orderSubmitted = true;
         // [GA4] 미션 12: 결제 수단 선택 완료
         track('add_payment_info', { currency: CURRENCY, value: sub - discount, coupon: coupon, payment_type: pay, items: cartItems(c) });
-        var order = { id: 'T' + Date.now().toString().slice(-8), value: sub - discount, shipping: ship(), coupon: coupon, pay: pay, lines: c };
+        var order = { id: 'T-' + (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)), value: sub - discount, shipping: ship(), coupon: coupon, pay: pay, lines: c };
         // [GA4] 미션 13: 구매 완료 (가상 주문, 실제 결제 없음). transaction_id 는 주문마다 달라야 합니다.
         track('purchase', { transaction_id: order.id, currency: CURRENCY, value: order.value, shipping: order.shipping, coupon: coupon, items: cartItems(c) });
         try { sessionStorage.setItem('db-last-order', JSON.stringify(order)); } catch (e) {}
