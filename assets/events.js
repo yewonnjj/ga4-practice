@@ -21,7 +21,8 @@
   /* 미션 2: CTA(행동 유도) 버튼 클릭. location = 버튼이 있는 자리 */
   on('[data-cta]', 'click', function () {
     // [GA4] 미션 2
-    track('cta_click', { cta_location: this.getAttribute('data-cta'), button_text: text(this) });
+    track('cta_click', { cta_location: this.getAttribute('data-cta'), button_text: text(this),
+      cta_action: this.getAttribute('href') === 'contact.html' ? 'consultation' : 'browse_products' });
   });
 
   /* 미션 3: 프로모션 배너가 화면에 보임(view_promotion) / 배너 클릭(select_promotion) */
@@ -55,13 +56,16 @@
     this.textContent = '복사됨 ✓';
   });
 
-  /* 미션 14: 뉴스레터 구독 = 회원가입류 전환 (sign_up) */
+  /* 미션 14: 뉴스레터 신청 완료 (계정 가입과 구분) */
+  var newsletterSubmitted = false;
   on('#newsletter-form', 'submit', function (e) {
     e.preventDefault();
+    if (newsletterSubmitted) return;
     var input = this.querySelector('input[type="email"]');
     if (!input.value || !input.checkValidity()) { input.reportValidity(); return; }
+    newsletterSubmitted = true;
     // [GA4] 미션 14: 이메일 주소는 절대 보내지 않습니다
-    track('sign_up', { method: 'newsletter' });
+    track('newsletter_signup', { method: 'newsletter', form_id: 'newsletter-form', signup_location: document.body.getAttribute('data-page') });
     input.value = '';
     this.innerHTML = '<p class="success">구독 신청이 접수된 것처럼 보이는 연습 화면입니다. 이메일은 저장되지 않았습니다.</p>';
   });
@@ -112,13 +116,14 @@
   /* 미션 20: 전화 문의 클릭 */
   on('a[href^="tel:"]', 'click', function () {
     // [GA4] 미션 20
-    track('contact_click', { contact_method: 'phone' });
+    track('contact_click', { contact_method: 'phone', contact_location: this.closest('.site-footer') ? 'footer' : document.body.getAttribute('data-page') });
   });
 
   /* 미션 15: 구독 상담 신청(리드) 폼 → 개인정보 안내 확인 → generate_lead */
   var lead = document.getElementById('lead-form');
   if (lead) {
     var modal = document.getElementById('privacy-modal');
+    var leadSubmitted = false;
     lead.addEventListener('submit', function (e) {
       e.preventDefault();
       if (!lead.checkValidity()) { lead.reportValidity(); return; }
@@ -126,7 +131,10 @@
     });
     document.getElementById('privacy-cancel').onclick = function () { modal.classList.remove('open'); };
     document.getElementById('privacy-ok').onclick = function () {
+      if (leadSubmitted || !modal.classList.contains('open') || !lead.checkValidity()) return;
+      leadSubmitted = true;
       var interest = (lead.querySelector('#lead-interest') || {}).value || '';
+      if (['개인 구독', '사무실 납품', '선물'].indexOf(interest) === -1) interest = '';
       // [GA4] 미션 15: 이름·연락처는 보내지 않고 "어떤 상담인지"만 보냅니다
       track('generate_lead', { lead_type: 'subscription_consult', interest: interest, currency: 'KRW', value: 0 });
       lead.querySelectorAll('input, textarea').forEach(function (el) { el.value = ''; });
@@ -147,7 +155,7 @@
      ↓ 여기 아래에 코드를 추가하세요 */
 
   on('#kakao-chat', 'click', function () {
-    track('contact_click', { contact_method: 'kakao' });
+    track('contact_click', { contact_method: 'kakao', contact_location: this.closest('.site-footer') ? 'footer' : document.body.getAttribute('data-page') });
   });
 
   on('#review-more', 'click', function () {
